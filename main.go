@@ -3,6 +3,7 @@ package main
 import (
 	"Godis/config"
 	"Godis/lib/logger"
+	"Godis/resp/handler"
 	"Godis/tcp"
 	"fmt"
 	"os"
@@ -22,7 +23,6 @@ func fileExists(filename string) bool {
 }
 
 func main() {
-
 	// 读取配置文件
 	if fileExists(configFile) {
 		config.SetupConfig(configFile)
@@ -35,7 +35,7 @@ func main() {
 		Address: fmt.Sprintf("%s:%d",
 			config.Properties.Bind,
 			config.Properties.Port),
-	}, tcp.MakeHandler())
+	}, handler.MakeRespHandler())
 
 	if err != nil {
 		logger.Error(err)
