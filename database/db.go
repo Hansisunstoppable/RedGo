@@ -1,0 +1,106 @@
+package database
+
+import (
+	"Godis/datastruct/dict"
+	"Godis/interface/database"
+	"Godis/interface/resp"
+	"Godis/resp/reply"
+	"strings"
+)
+
+// ExecFunc 传入 DB 实例 与 命令进行执行。所有命令处理函数共享相同的签名 ExecFunc
+type ExecFunc func(db *DB, args [][]byte) resp.Reply
+
+// CmdLine 存储命令行参数
+type CmdLine = [][]byte
+
+// DB 单个数据库实例，一个数据库可能包含多个数据库实例
+type DB struct {
+	index int
+	data  dict.Dict
+}
+
+func MakeDB() *DB {
+	return &DB{
+		data: dict.MakeSyncDict(), //
+	}
+}
+
+func (db *DB) Exec(client resp.Connection, cmdLine CmdLine) resp.Reply {
+	cmdName := strings.ToLower(string(cmdLine[0])) // 读取命令名并转为小写
+	cmd, ok := cmdTable[cmdName]                   // 获取命令处理函数与参数需求
+	if !ok {
+		return reply.MakeStandardErrorReply("ERR unknown command '" + cmdName + "'")
+	}
+	if !ValidateArity(cmd.arity, cmdLine) {
+		return reply.MakeArgNumErrReply(cmdName)
+	}
+
+	// 从 1 开始，去掉命令名
+	return cmd.exec(db, cmdLine[1:])
+}
+
+// ValidateArity 验证传入的参数个数是否合法
+func ValidateArity(arity int, args [][]byte) bool {
+	if arity >= 0 {
+		return arity == len(args)
+	} else {
+		return -arity <= len(args)
+	}
+}
+
+func (db *DB) AfterClientClose(client resp.Connection) {
+
+}
+func (db *DB) Close() {
+
+}
+
+// 下面这一系列方法，是对底层 data  dict.Dict 的封装
+// GetEntity returns DataEntity bind to the given key
+func (db *DB) GetEntity(key string) (*database.DataEntity, bool) {
+	raw, ok := db.data.Get(key)
+	if !ok {
+		return nil, false
+	}
+	entity, _ := raw.(*database.DataEntity)
+	return entity, true
+}
+
+// PutEntity stores the given DataEntity in the database
+func (db *DB) PutEntity(key string, entity *database.DataEntity) int {
+	return db.data.Put(key, entity)
+}
+
+// PutIfExists stores the given DataEntity in the database if the key already exists
+func (db *DB) PutIfExists(key string, entity *database.DataEntity) int {
+	return db.data.PutIfExists(key, entity)
+}
+
+// PutIfAbsent stores the given DataEntity in the database if the key does not exist
+func (db *DB) PutIfAbsent(key string, entity *database.DataEntity) int {
+	return db.data.PutIfAbsent(key, entity)
+}
+
+// Remove removes the given key from database
+func (db *DB) Remove(key string) int {
+	return db.data.Remove(key)
+}
+
+// Removes removes the given keys from database
+func (db *DB) Removes(key ...string) int {
+	deleted := 0
+	for _, key := range key {
+		_, ok := db.data.Get(key)
+		if ok {
+			db.data.Remove(key)
+			deleted++
+		}
+	}
+	return deleted
+}
+
+// Flush removes all data in database
+func (db *DB) Flush() {
+	db.data.Clear()
+}

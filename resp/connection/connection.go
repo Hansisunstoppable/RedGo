@@ -56,6 +56,6 @@ func (c *Connection) GetDBIndex() int {
 }
 
 // SelectDB 设置数据库
-func (c *Connection) SelectDB(db int) {
-	c.selectedDB = db
+func (c *Connection) SelectDB(dbNum int) {
+	c.selectedDB = dbNum
 }
