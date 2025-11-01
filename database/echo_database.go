@@ -6,7 +6,8 @@ import (
 	"Godis/resp/reply"
 )
 
-// 回显类数据库
+// 回显数据库
+// 不进行任何操作，只是简单 echo
 type EchoDatabase struct{}
 
 func NewEchoDatabase() *EchoDatabase {

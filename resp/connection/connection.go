@@ -12,7 +12,7 @@ type Connection struct {
 	conn         net.Conn   // 底层的网络连接
 	waitingReply wait.Wait  // 等待完成响应的同步器
 	mu           sync.Mutex // 发送响应时的互斥锁
-	selectedDB   int        // 选择的数据库的编号
+	selectedDB   int        // 不同的连接对应不同的数据库的编号
 }
 
 func NewConnection(conn net.Conn) *Connection {

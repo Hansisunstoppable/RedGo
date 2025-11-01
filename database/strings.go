@@ -3,6 +3,7 @@ package database
 import (
 	"Godis/interface/database"
 	"Godis/interface/resp"
+	"Godis/lib/util"
 	"Godis/resp/reply"
 )
 
@@ -28,6 +29,7 @@ func execGet(db *DB, args [][]byte) resp.Reply {
 		// TODO: If we have multiple types, we need to check the conversion if it's not []byte
 		return reply.MakeBulkReply(entity.Data.([]byte))
 	}
+
 	return reply.MakeNullBulkReply()
 }
 
@@ -39,6 +41,7 @@ func execSet(db *DB, args [][]byte) resp.Reply {
 		Data: value,
 	}
 	db.PutEntity(key, entity)
+	db.addAof(util.ToCmdLineWithName("SET", args...)) // 写命令才需要写入 aof
 	return reply.MakeOKReply()
 }
 
@@ -50,6 +53,7 @@ func execSetNX(db *DB, args [][]byte) resp.Reply {
 		Data: value,
 	}
 	result := db.PutIfAbsent(key, entity)
+	db.addAof(util.ToCmdLineWithName("SETNX", args...)) // 写命令才需要写入 aof
 	return reply.MakeIntReply(int64(result))
 }
 
@@ -59,6 +63,7 @@ func execGetSet(db *DB, args [][]byte) resp.Reply {
 	value := args[1]
 	entity, ok := db.GetEntity(key)
 	db.PutEntity(key, &database.DataEntity{Data: value})
+	db.addAof(util.ToCmdLineWithName("GETSET", args...))
 	if !ok { // 判断旧值是否存在
 		return reply.MakeNullBulkReply()
 	}

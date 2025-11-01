@@ -82,7 +82,7 @@ func parse(src io.Reader) *ServerProperties {
 					fieldVal.SetInt(intValue)
 				}
 			case reflect.Bool:
-				boolValue := "yes" == value
+				boolValue := value == "yes"
 				fieldVal.SetBool(boolValue)
 			case reflect.Slice:
 				if field.Type.Elem().Kind() == reflect.String {

@@ -134,7 +134,7 @@ func readLine(bufReader *bufio.Reader, state *readState) ([]byte, bool, error) {
 	var err error
 	// 读取一行即可（非 bulk 多行）
 	if state.bulkLen == 0 {
-		line, err = bufReader.ReadBytes('\n')
+		line, err = bufReader.ReadBytes('\n') // 流式读取
 		if err != nil {
 			return nil, true, err
 		}

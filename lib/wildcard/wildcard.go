@@ -1,6 +1,7 @@
 package wildcard
 
 // 实现 KEYS 命令的模式匹配
+// wildcard: 通配符
 
 // typeCode
 const (

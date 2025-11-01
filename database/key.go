@@ -11,6 +11,7 @@ package database
 
 import (
 	"Godis/interface/resp"
+	"Godis/lib/util"
 	"Godis/lib/wildcard"
 	"Godis/resp/reply"
 )
@@ -33,6 +34,9 @@ func execDel(db *DB, args [][]byte) resp.Reply {
 		keys[i] = string(arg)
 	}
 	deleted := db.Removes(keys...)
+	if deleted > 0 {
+		db.addAof(util.ToCmdLineWithName("DEL", args...))
+	}
 	return reply.MakeIntReply(int64(deleted))
 }
 
@@ -51,6 +55,7 @@ func execExist(db *DB, args [][]byte) resp.Reply {
 // execFlushDB Handle the FLUSHDB command, delete all keys in current DB
 func execFlushDB(db *DB, args [][]byte) resp.Reply {
 	db.Flush()
+	db.addAof(util.ToCmdLineWithName("FLUSHDB", args...))
 	return reply.MakeOKReply()
 }
 
@@ -77,6 +82,7 @@ func execRename(db *DB, args [][]byte) resp.Reply {
 	if entity, ok := db.GetEntity(scr); ok {
 		db.PutEntity(dst, entity) // 若 key2 存在，则会覆盖
 		db.Remove(scr)
+		db.addAof(util.ToCmdLineWithName("RENAME", args...))
 		return reply.MakeOKReply()
 	} else {
 		return reply.MakeStandardErrorReply("ERR no such key")
@@ -96,6 +102,7 @@ func execRenameNX(db *DB, args [][]byte) resp.Reply {
 	}
 	db.PutEntity(dst, entity)
 	db.Remove(scr)
+	db.addAof(util.ToCmdLineWithName("RENAMENX", args...))
 	return reply.MakeIntReply(1)
 }
 

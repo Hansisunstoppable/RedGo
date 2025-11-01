@@ -1,6 +1,7 @@
 package database
 
 import (
+	"Godis/aof"
 	"Godis/config"
 	"Godis/interface/resp"
 	"Godis/lib/logger"
@@ -11,13 +12,14 @@ import (
 
 // Database 存储所有 DB 实例
 type Database struct {
-	dbSet []*DB
+	dbSet      []*DB           // 所有数据库实例
+	aofHandler *aof.AofHandler // AOF 处理器的实例
 }
 
 // MakeDatabase 创建数据库, 默认创建 16 个 DB 实例
 func NewDatabase() *Database {
 	database := &Database{}
-	// 若配置文件中为配置，使用默认参数
+	// 若配置文件中未配置，使用默认参数
 	if config.Properties.Databases == 0 {
 		config.Properties.Databases = 16
 	}
@@ -28,6 +30,23 @@ func NewDatabase() *Database {
 		db.index = i           // 设置 DB 实例编号
 		database.dbSet[i] = db // 加入到数据库集合中
 	}
+	logger.Info("config.Properties.AppendOnly:" + strconv.FormatBool(config.Properties.AppendOnly))
+	// 根据配置文件判断是否要使用 aof
+	if config.Properties.AppendOnly {
+		aofHandler, err := aof.NewAofHandler(database)
+		if err != nil {
+			panic(err)
+		}
+		database.aofHandler = aofHandler
+		// 为每个 DB 实例添加 aofHandler
+		for _, db := range database.dbSet {
+			currentDB := db
+			currentDB.addAof = func(cmd CmdLine) {
+				database.aofHandler.AddAof(currentDB.index, cmd)
+			}
+		}
+	}
+
 	return database
 }
 
@@ -56,16 +75,16 @@ func (d *Database) Exec(c resp.Connection, args [][]byte) resp.Reply {
 		if len(args) != 2 {
 			return reply.MakeArgNumErrReply("select")
 		}
-		return d.execSelect(c, d, args)
+		return d.execSelect(c, d, args[1:]) // args 从 1 开始传入，去掉最前面的 SELECT 命令名
 	}
 	db := d.dbSet[c.GetDBIndex()] // 获取 DB 实例
 	return db.Exec(c, args)       // 执行命令
 }
 
 func (d *Database) AfterClientClose(c resp.Connection) {
-	logger.Info("EchoDatabase AfterClientClose")
+	logger.Info("Database AfterClientClose")
 }
 
 func (d *Database) Close() {
-	logger.Info("EchoDatabase Close")
+	logger.Info("Database Close")
 }

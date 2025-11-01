@@ -16,13 +16,15 @@ type CmdLine = [][]byte
 
 // DB 单个数据库实例，一个数据库可能包含多个数据库实例
 type DB struct {
-	index int
-	data  dict.Dict
+	index  int
+	data   dict.Dict
+	addAof func(CmdLine) // 用于执行 AOF 处理器的 AddAof 方法
 }
 
 func MakeDB() *DB {
 	return &DB{
-		data: dict.MakeSyncDict(), //
+		data:   dict.MakeSyncDict(),  // 内存数据库底层数据结构
+		addAof: func(cmd CmdLine) {}, // 初始化为空函数，防止第一次调用时出现空指针异常（execSet -> addAof -> NewAofHandler -> execSet -> addAof(未初始化，空指针异常）
 	}
 }
 
