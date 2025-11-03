@@ -1,6 +1,8 @@
 package handler
 
 import (
+	"Godis/cluster"
+	"Godis/config"
 	"Godis/database"
 	databaseface "Godis/interface/database"
 	"Godis/lib/logger"
@@ -33,7 +35,13 @@ type RespHandler struct {
 // MakeRespHandler 创建一个 RespHandler 实例
 func MakeRespHandler() *RespHandler {
 	var db databaseface.Database
-	db = database.NewDatabase()
+
+	if config.Properties.Self != "" && len(config.Properties.Peers) > 0 { // 集群模式
+		db = cluster.MakeClusterDatabase() // 创建集群结点
+	} else {
+		db = database.NewStandaloneDatabase() // 创建单机模式
+	}
+
 	return &RespHandler{
 		db: db,
 	}

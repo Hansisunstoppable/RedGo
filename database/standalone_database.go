@@ -1,5 +1,7 @@
 package database
 
+// 单机版的数据库实现，包含多个数据库实例（redis 可以选择多个不同的数据库实例）
+
 import (
 	"Godis/aof"
 	"Godis/config"
@@ -10,15 +12,15 @@ import (
 	"strings"
 )
 
-// Database 存储所有 DB 实例
-type Database struct {
+// StandaloneDatabase 存储所有 DB 实例
+type StandaloneDatabase struct {
 	dbSet      []*DB           // 所有数据库实例
 	aofHandler *aof.AofHandler // AOF 处理器的实例
 }
 
 // MakeDatabase 创建数据库, 默认创建 16 个 DB 实例
-func NewDatabase() *Database {
-	database := &Database{}
+func NewStandaloneDatabase() *StandaloneDatabase {
+	database := &StandaloneDatabase{}
 	// 若配置文件中未配置，使用默认参数
 	if config.Properties.Databases == 0 {
 		config.Properties.Databases = 16
@@ -51,7 +53,7 @@ func NewDatabase() *Database {
 }
 
 // execSelect 根据 args[0] 去设置 Connection.selected, 即对应的 DB 实例
-func (d *Database) execSelect(c resp.Connection, database *Database, args [][]byte) resp.Reply {
+func (d *StandaloneDatabase) execSelect(c resp.Connection, database *StandaloneDatabase, args [][]byte) resp.Reply {
 	dbIndex, err := strconv.Atoi(string(args[0]))
 	if err != nil {
 		return reply.MakeStandardErrorReply("ERR invalid DB index")
@@ -64,7 +66,7 @@ func (d *Database) execSelect(c resp.Connection, database *Database, args [][]by
 }
 
 // Exec 提供给 handler 调用，所有命令都通过 Exec 统一处理
-func (d *Database) Exec(c resp.Connection, args [][]byte) resp.Reply {
+func (d *StandaloneDatabase) Exec(c resp.Connection, args [][]byte) resp.Reply {
 	defer func() { // 捕获 panic, 进行 recover 记录日志
 		if err := recover(); err != nil {
 			logger.Error("Database Exec panic:" + err.(error).Error())
@@ -81,10 +83,10 @@ func (d *Database) Exec(c resp.Connection, args [][]byte) resp.Reply {
 	return db.Exec(c, args)       // 执行命令
 }
 
-func (d *Database) AfterClientClose(c resp.Connection) {
+func (d *StandaloneDatabase) AfterClientClose(c resp.Connection) {
 	logger.Info("Database AfterClientClose")
 }
 
-func (d *Database) Close() {
+func (d *StandaloneDatabase) Close() {
 	logger.Info("Database Close")
 }
