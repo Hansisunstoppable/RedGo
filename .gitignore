@@ -20,6 +20,9 @@
 # aof persistence file
 appendonly.aof
 
+# test_redis_1、test_redis_2 等
+test_redis_*/
+
 # Go workspace file
 go.work
 
