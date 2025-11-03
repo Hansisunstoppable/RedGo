@@ -81,6 +81,10 @@ func (r *StandardErrorReply) ToBytes() []byte {
 	return []byte("-" + r.Status + CRLF)
 }
 
+func (r *StandardErrorReply) Error() string {
+	return r.Status
+}
+
 func MakeStandardErrorReply(status string) *StandardErrorReply {
 	return &StandardErrorReply{Status: status}
 }
