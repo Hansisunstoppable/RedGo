@@ -1,5 +1,5 @@
 # RedGo
-从零开始，基于 Golang 实现的一个简易 Redis 服务器
+从零开始，基于 Golang 实现的一个 Redis 服务器
 
 ## 实现功能
 - 网络层：TCP 服务器
@@ -61,7 +61,7 @@ go run RedGo
 redis-benchmark -h localhost -p 6379 -n 100000 -c 50
 ```
 ### 测试结果
-测试环境：AMD Ryzen 7 7840H, 32GB RAM, Ubuntu 22.04 LTS (WSL 2 on Windows 11)
+测试环境：AMD Ryzen 7 7840H, 32GB RAM, Ubuntu 22.04 (WSL 2 on Windows 11)
 
 **关键指标说明：**
 
