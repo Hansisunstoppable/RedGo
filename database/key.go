@@ -1,5 +1,12 @@
 package database
 
+import (
+	"Godis/interface/resp"
+	"Godis/lib/util"
+	"Godis/lib/wildcard"
+	"Godis/resp/reply"
+)
+
 // 实现 KEYS 命令集
 // DEL
 // EXISTS
@@ -8,13 +15,6 @@ package database
 // RENAME
 // RENAMENX
 // KEYS
-
-import (
-	"Godis/interface/resp"
-	"Godis/lib/util"
-	"Godis/lib/wildcard"
-	"Godis/resp/reply"
-)
 
 // init 方法，导入包时自动执行，注册方法到 cmdTable
 func init() {
