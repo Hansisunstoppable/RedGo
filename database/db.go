@@ -2,6 +2,7 @@ package database
 
 import (
 	"Godis/datastruct/dict"
+	"Godis/datastruct/hash"
 	"Godis/interface/database"
 	"Godis/interface/resp"
 	"Godis/resp/reply"
@@ -105,4 +106,32 @@ func (db *DB) Removes(key ...string) int {
 // Flush removes all data in database
 func (db *DB) Flush() {
 	db.data.Clear()
+}
+
+// getAsHash 返回指定 key 对应的哈希表对象，如果 key 不存在则返回 nil
+func (db *DB) getAsHash(key string) (*hash.Hash, bool) {
+	entity, exists := db.GetEntity(key)
+	if !exists {
+		return nil, false // key 不存在
+	}
+	hashObj, ok := entity.Data.(*hash.Hash)
+	if !ok {
+		return nil, true // key 存在但不是哈希类型
+	}
+	return hashObj, true // 成功返回哈希对象
+}
+
+// getOrCreateHash 获取或创建哈希表对象
+// 如果 key 对应的值已存在且为哈希类型，则返回已有对象；
+// 如果 key 对应的值不存在，则创建新哈希并存入数据库；
+// 返回哈希对象和一个布尔值表示 key 是否已存在
+func (db *DB) getOrCreateHash(key string) (*hash.Hash, bool) {
+	hashObj, exists := db.getAsHash(key)
+	if exists {
+		return hashObj, true // key 已存在，直接返回
+	}
+	// key 不存在，创建新的哈希表对象
+	hashObj = hash.MakeHash()
+	db.PutEntity(key, &database.DataEntity{Data: hashObj})
+	return hashObj, false // 新创建的哈希表
 }

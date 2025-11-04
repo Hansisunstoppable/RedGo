@@ -10,7 +10,7 @@ import (
 func makeRouter() map[string]CmdFunc {
 	routerMap := make(map[string]CmdFunc) // 不同的命令用不同的转发逻辑
 
-	// KEYS 命令 与 STRINGS 命令的路由
+	// KEYS and STRINGS operations
 	routerMap["exists"] = defaultFunc
 	routerMap["type"] = defaultFunc
 	routerMap["set"] = defaultFunc
@@ -28,7 +28,7 @@ func makeRouter() map[string]CmdFunc {
 
 	routerMap["flushdb"] = flushDBFunc
 
-	// LIST 命令的路由
+	// List operations
 	routerMap["lpush"] = defaultFunc
 	routerMap["rpush"] = defaultFunc
 	routerMap["lpop"] = defaultFunc
@@ -37,6 +37,21 @@ func makeRouter() map[string]CmdFunc {
 	routerMap["llen"] = defaultFunc
 	routerMap["lindex"] = defaultFunc
 	routerMap["lset"] = defaultFunc
+
+	// Hash operations
+	routerMap["hset"] = defaultFunc       // hset key field value
+	routerMap["hsetnx"] = defaultFunc     // hsetnx key field value
+	routerMap["hget"] = defaultFunc       // hget key field
+	routerMap["hexists"] = defaultFunc    // hexists key field
+	routerMap["hdel"] = defaultFunc       // hdel key field [field ...]
+	routerMap["hlen"] = defaultFunc       // hlen key
+	routerMap["hgetall"] = defaultFunc    // hgetall key
+	routerMap["hkeys"] = defaultFunc      // hkeys key
+	routerMap["hvals"] = defaultFunc      // hvals key
+	routerMap["hmget"] = defaultFunc      // hmget key field [field ...]
+	routerMap["hmset"] = defaultFunc      // hmset key field value [field value ...]
+	routerMap["hrandfield"] = defaultFunc // hrandfield key [count]
+	routerMap["hencoding"] = defaultFunc  // hencoding key (custom command)
 
 	return routerMap
 }
