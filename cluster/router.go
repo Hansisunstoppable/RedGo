@@ -9,6 +9,8 @@ import (
 
 func makeRouter() map[string]CmdFunc {
 	routerMap := make(map[string]CmdFunc) // 不同的命令用不同的转发逻辑
+
+	// KEYS 命令 与 STRINGS 命令的路由
 	routerMap["exists"] = defaultFunc
 	routerMap["type"] = defaultFunc
 	routerMap["set"] = defaultFunc
@@ -25,6 +27,16 @@ func makeRouter() map[string]CmdFunc {
 	routerMap["del"] = delFunc
 
 	routerMap["flushdb"] = flushDBFunc
+
+	// LIST 命令的路由
+	routerMap["lpush"] = defaultFunc
+	routerMap["rpush"] = defaultFunc
+	routerMap["lpop"] = defaultFunc
+	routerMap["rpop"] = defaultFunc
+	routerMap["lrange"] = defaultFunc
+	routerMap["llen"] = defaultFunc
+	routerMap["lindex"] = defaultFunc
+	routerMap["lset"] = defaultFunc
 
 	return routerMap
 }
