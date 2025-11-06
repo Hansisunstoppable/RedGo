@@ -7,11 +7,11 @@ import (
 	"Godis/resp/reply"
 )
 
-func Ping(db *DB, args [][]byte) resp.Reply {
-	return reply.MakePongReply()
-}
-
 // init 函数是 Go 语言中的一个特殊函数，它会在包被导入时自动执行
 func init() {
 	RegisterCommand("Ping", Ping, 1)
+}
+
+func Ping(db *DB, args [][]byte) resp.Reply {
+	return reply.MakePongReply()
 }

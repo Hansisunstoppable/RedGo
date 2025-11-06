@@ -3,6 +3,7 @@ package database
 import (
 	"Godis/datastruct/dict"
 	"Godis/datastruct/hash"
+	"Godis/datastruct/set"
 	"Godis/interface/database"
 	"Godis/interface/resp"
 	"Godis/resp/reply"
@@ -134,4 +135,34 @@ func (db *DB) getOrCreateHash(key string) (*hash.Hash, bool) {
 	hashObj = hash.MakeHash()
 	db.PutEntity(key, &database.DataEntity{Data: hashObj})
 	return hashObj, false // 新创建的哈希表
+}
+
+// getAsSet 返回指定 key 对应的 set 对象，如果不存在则返回 nil
+func getAsSet(db *DB, key string) (set.Set, reply.ErrorReply) {
+	entity, exists := db.GetEntity(key)
+	if !exists {
+		return nil, nil
+	}
+
+	setObj, ok := entity.Data.(set.Set)
+	if !ok {
+		return nil, reply.MakeWrongTypeErrReply()
+	}
+	return setObj, nil
+}
+
+// getOrInitSet 返回指定 key 对应的 set 对象，若不存在，则创建一个 set 对象并返回
+func getOrInitSet(db *DB, key string) (set.Set, bool, reply.ErrorReply) {
+	setObj, errReply := getAsSet(db, key)
+	if errReply != nil {
+		return nil, false, errReply
+	}
+
+	isNew := false
+	if setObj == nil {
+		setObj = set.NewHashSet()
+		isNew = true
+	}
+
+	return setObj, isNew, nil
 }
