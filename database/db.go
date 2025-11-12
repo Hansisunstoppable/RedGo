@@ -4,6 +4,7 @@ import (
 	"Godis/datastruct/dict"
 	"Godis/datastruct/hash"
 	"Godis/datastruct/set"
+	"Godis/datastruct/zset"
 	"Godis/interface/database"
 	"Godis/interface/resp"
 	"Godis/resp/reply"
@@ -165,4 +166,18 @@ func getOrInitSet(db *DB, key string) (set.Set, bool, reply.ErrorReply) {
 	}
 
 	return setObj, isNew, nil
+}
+
+func getAsZSet(db *DB, key string) (zset.ZSet, bool) {
+	entity, exists := db.GetEntity(key)
+	if !exists {
+		return zset.NewZSet(), false
+	}
+
+	zsetObj, ok := entity.Data.(zset.ZSet)
+	if !ok {
+		return nil, true // Key exists but is not a ZSet
+	}
+
+	return zsetObj, true
 }
