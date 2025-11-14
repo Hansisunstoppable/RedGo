@@ -1,10 +1,40 @@
 package database
 
 import (
+	"Godis/datastruct/hash"
+	"Godis/interface/database"
 	"Godis/interface/resp"
 	"Godis/lib/util"
 	"Godis/resp/reply"
 )
+
+// getOrCreateHash 获取或创建哈希表对象
+// 如果 key 对应的值已存在且为哈希类型，则返回已有对象；
+// 如果 key 对应的值不存在，则创建新哈希并存入数据库；
+// 返回哈希对象和一个布尔值表示 key 是否已存在
+func (db *DB) getOrCreateHash(key string) (*hash.Hash, bool) {
+	hashObj, exists := db.getAsHash(key)
+	if exists {
+		return hashObj, true // key 已存在，直接返回
+	}
+	// key 不存在，创建新的哈希表对象
+	hashObj = hash.MakeHash()
+	db.PutEntity(key, &database.DataEntity{Data: hashObj})
+	return hashObj, false // 新创建的哈希表
+}
+
+// getAsHash 返回指定 key 对应的哈希表对象，如果 key 不存在则返回 nil
+func (db *DB) getAsHash(key string) (*hash.Hash, bool) {
+	entity, exists := db.GetEntity(key)
+	if !exists {
+		return nil, false // key 不存在
+	}
+	hashObj, ok := entity.Data.(*hash.Hash)
+	if !ok {
+		return nil, true // key 存在但不是哈希类型
+	}
+	return hashObj, true // 成功返回哈希对象
+}
 
 // HSet 设置哈希中指定字段的值
 // HSET key field value
@@ -13,11 +43,14 @@ func execHSet(db *DB, args [][]byte) resp.Reply {
 	field := string(args[1])
 	value := string(args[2])
 
+	var result resp.Reply
+
 	hashObj, _ := db.getOrCreateHash(key)
-	result := hashObj.Set(field, value)
+	resultHash := hashObj.Set(field, value)
 
 	db.addAof(util.ToCmdLineWithName("HSET", args...))
-	return reply.MakeIntReply(int64(result)) // 返回 1 表示新增，0 表示更新
+	result = reply.MakeIntReply(int64(resultHash)) // 返回 1 表示新增，0 表示更新
+	return result
 }
 
 // HGet 获取哈希中指定字段的值
@@ -219,16 +252,16 @@ func execHSetNX(db *DB, args [][]byte) resp.Reply {
 
 func init() {
 	// 注册哈希相关命令
-	RegisterCommand("HSET", execHSet, 4)           // HSET key field value
-	RegisterCommand("HGET", execHGet, 3)           // HGET key field
-	RegisterCommand("HEXISTS", execHExists, 3)     // HEXISTS key field
-	RegisterCommand("HDEL", execHDel, -3)          // HDEL key field [field ...]（至少 3 个参数）
-	RegisterCommand("HLEN", execHLen, 2)           // HLEN key
-	RegisterCommand("HGETALL", execHGetAll, 2)     // HGETALL key
-	RegisterCommand("HKEYS", execHKeys, 2)         // HKEYS key
-	RegisterCommand("HVALS", execHVals, 2)         // HVALS key
-	RegisterCommand("HMGET", execHMGet, -3)        // HMGET key field [field ...]（至少 3 个参数）
-	RegisterCommand("HMSET", execHMSet, -4)        // HMSET key field value [field value ...]（至少 4 个参数）
-	RegisterCommand("HENCODING", execHEncoding, 2) // HENCODING key（自定义）
-	RegisterCommand("HSETNX", execHSetNX, 4)       // HSETNX key field value
+	RegisterCommand("HSET", execHSet, writeFirstKey, 4)          // HSET key field value
+	RegisterCommand("HGET", execHGet, readFirstKey, 3)           // HGET key field
+	RegisterCommand("HEXISTS", execHExists, readFirstKey, 3)     // HEXISTS key field
+	RegisterCommand("HDEL", execHDel, writeFirstKey, -3)         // HDEL key field [field ...]（至少 3 个参数）
+	RegisterCommand("HLEN", execHLen, readFirstKey, 2)           // HLEN key
+	RegisterCommand("HGETALL", execHGetAll, readFirstKey, 2)     // HGETALL key
+	RegisterCommand("HKEYS", execHKeys, readFirstKey, 2)         // HKEYS key
+	RegisterCommand("HVALS", execHVals, readFirstKey, 2)         // HVALS key
+	RegisterCommand("HMGET", execHMGet, readFirstKey, -3)        // HMGET key field [field ...]（至少 3 个参数）
+	RegisterCommand("HMSET", execHMSet, writeFirstKey, -4)       // HMSET key field value [field value ...]（至少 4 个参数）
+	RegisterCommand("HENCODING", execHEncoding, readFirstKey, 2) // HENCODING key（自定义）
+	RegisterCommand("HSETNX", execHSetNX, writeFirstKey, 4)      // HSETNX key field value
 }

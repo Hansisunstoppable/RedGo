@@ -66,9 +66,7 @@ func ListenAndServe(listener net.Listener, handler tcp.Handler, closeChan <-chan
 		logger.Info("accept a new connection from ", conn.RemoteAddr().String())
 		waitDone.Add(1)
 		go func() {
-			defer func() {
-				waitDone.Done()
-			}()
+			defer waitDone.Done()
 			handler.Handle(ctx, conn)
 		}()
 	}

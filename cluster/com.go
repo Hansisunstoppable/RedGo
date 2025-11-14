@@ -60,7 +60,7 @@ func (c *ClusterDatabase) relayExec(peer string, conn resp.Connection, args [][]
 	}()
 
 	// 转发命令，先切换到对应的数据库实例, 再转发实际命令
-	client.Send(util.ToCmdLime("SELECT", strconv.Itoa(conn.GetDBIndex())))
+	client.Send(util.ToCmdLine("SELECT", strconv.Itoa(conn.GetDBIndex())))
 	return client.Send(args)
 }
 

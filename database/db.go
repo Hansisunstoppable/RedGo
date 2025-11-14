@@ -2,17 +2,22 @@ package database
 
 import (
 	"Godis/datastruct/dict"
-	"Godis/datastruct/hash"
-	"Godis/datastruct/set"
-	"Godis/datastruct/zset"
 	"Godis/interface/database"
 	"Godis/interface/resp"
 	"Godis/resp/reply"
 	"strings"
+	"sync"
+)
+
+const (
+	dataDictSize = 1 << 16
 )
 
 // ExecFunc 传入 DB 实例 与 命令进行执行。所有命令处理函数共享相同的签名 ExecFunc
 type ExecFunc func(db *DB, args [][]byte) resp.Reply
+
+// PreFunc 返回需要 write 或 read 的 key
+type PreFunc func(args [][]byte) ([]string, []string)
 
 // CmdLine 存储命令行参数
 type CmdLine = [][]byte
@@ -20,18 +25,36 @@ type CmdLine = [][]byte
 // DB 单个数据库实例，一个数据库可能包含多个数据库实例
 type DB struct {
 	index  int
-	data   dict.Dict
+	data   *dict.ConcurrentDict
 	addAof func(CmdLine) // 用于执行 AOF 处理器的 AddAof 方法
+	// lockMgr *KeyLockManager // key 级别锁管理器
 }
 
 func MakeDB() *DB {
 	return &DB{
-		data:   dict.MakeSyncDict(),  // 内存数据库底层数据结构
-		addAof: func(cmd CmdLine) {}, // 初始化为空函数，防止第一次调用时出现空指针异常（execSet -> addAof -> NewAofHandler -> execSet -> addAof(未初始化，空指针异常）
+		data:   dict.MakeConcurrentDict(dataDictSize), // 内存数据库底层数据结构
+		addAof: func(cmd CmdLine) {},                  // 初始化为空函数，防止第一次调用时出现空指针异常（execSet -> addAof -> NewAofHandler -> execSet -> addAof(未初始化，空指针异常）
+		// lockMgr: NewKeyLockManager(),
 	}
 }
 
+// KeyLockManager 管理所有 key 对应的锁
+type KeyLockManager struct {
+	locks sync.Map
+}
+
+func NewKeyLockManager() *KeyLockManager {
+	return &KeyLockManager{}
+}
+
 func (db *DB) Exec(client resp.Connection, cmdLine CmdLine) resp.Reply {
+	// TODO multi 事务模式的处理逻辑
+
+	// 正常模式的处理逻辑
+	return db.execNormalCommand(cmdLine)
+}
+
+func (db *DB) execNormalCommand(cmdLine [][]byte) resp.Reply {
 	cmdName := strings.ToLower(string(cmdLine[0])) // 读取命令名并转为小写
 	cmd, ok := cmdTable[cmdName]                   // 获取命令处理函数与参数需求
 	if !ok {
@@ -40,9 +63,27 @@ func (db *DB) Exec(client resp.Connection, cmdLine CmdLine) resp.Reply {
 	if !ValidateArity(cmd.arity, cmdLine) {
 		return reply.MakeArgNumErrReply(cmdName)
 	}
+	// 获取 prepare 函数，加相关 key 锁
+	prepare := cmd.prepare
+	write, read := prepare(cmdLine[1:])
+	db.RWLocks(write, read)
+	defer db.RWUnLocks(write, read)
+	fun := cmd.exec
+	return fun(db, cmdLine[1:]) // // 从 1 开始，去掉命令名
+}
 
-	// 从 1 开始，去掉命令名
-	return cmd.exec(db, cmdLine[1:])
+// execWithLock 内部不加锁，调用者加锁
+func (db *DB) execWithLock(cmdLine [][]byte) resp.Reply {
+	cmdName := strings.ToLower(string(cmdLine[0]))
+	cmd, ok := cmdTable[cmdName]
+	if !ok {
+		return reply.MakeStandardErrorReply("ERR unknown command '" + cmdName + "'")
+	}
+	if !ValidateArity(cmd.arity, cmdLine) {
+		return reply.MakeStandardErrorReply(cmdName)
+	}
+	fun := cmd.exec
+	return fun(db, cmdLine[1:])
 }
 
 // ValidateArity 验证传入的参数个数是否合法
@@ -62,9 +103,10 @@ func (db *DB) Close() {
 }
 
 // 下面这一系列方法，是对底层 data  dict.Dict 的封装
+// 外部调用者调用这些方法时，已经上锁。因此这些方法内部无需上锁。
 // GetEntity returns DataEntity bind to the given key
 func (db *DB) GetEntity(key string) (*database.DataEntity, bool) {
-	raw, ok := db.data.Get(key)
+	raw, ok := db.data.GetWithLock(key)
 	if !ok {
 		return nil, false
 	}
@@ -74,110 +116,52 @@ func (db *DB) GetEntity(key string) (*database.DataEntity, bool) {
 
 // PutEntity stores the given DataEntity in the database
 func (db *DB) PutEntity(key string, entity *database.DataEntity) int {
-	return db.data.Put(key, entity)
+	return db.data.PutWithLock(key, entity)
 }
 
 // PutIfExists stores the given DataEntity in the database if the key already exists
 func (db *DB) PutIfExists(key string, entity *database.DataEntity) int {
-	return db.data.PutIfExists(key, entity)
+	return db.data.PutIfExistsWithLock(key, entity)
 }
 
 // PutIfAbsent stores the given DataEntity in the database if the key does not exist
 func (db *DB) PutIfAbsent(key string, entity *database.DataEntity) int {
-	return db.data.PutIfAbsent(key, entity)
+	return db.data.PutIfAbsentWithLock(key, entity)
 }
 
-// Remove removes the given key from database
+// Remove 根据给定 key，移除元素
 func (db *DB) Remove(key string) int {
-	return db.data.Remove(key)
+	result := db.data.RemoveWithLock(key) // 内部不加锁，锁已经由外部调用者管理
+
+	return result
 }
 
-// Removes removes the given keys from database
+// Removes 移除若干元素
 func (db *DB) Removes(key ...string) int {
 	deleted := 0
 	for _, key := range key {
-		_, ok := db.data.Get(key)
+		_, ok := db.data.GetWithLock(key)
 		if ok {
-			db.data.Remove(key)
+			db.Remove(key)
 			deleted++
 		}
 	}
 	return deleted
 }
 
-// Flush removes all data in database
+// Flush 移除所有元素
 func (db *DB) Flush() {
 	db.data.Clear()
 }
 
-// getAsHash 返回指定 key 对应的哈希表对象，如果 key 不存在则返回 nil
-func (db *DB) getAsHash(key string) (*hash.Hash, bool) {
-	entity, exists := db.GetEntity(key)
-	if !exists {
-		return nil, false // key 不存在
-	}
-	hashObj, ok := entity.Data.(*hash.Hash)
-	if !ok {
-		return nil, true // key 存在但不是哈希类型
-	}
-	return hashObj, true // 成功返回哈希对象
+/* ---- Lock Function ----- */
+
+// RWLocks 对相关 key 加写锁与读锁
+func (db *DB) RWLocks(writeKeys []string, readKeys []string) {
+	db.data.RWLocks(writeKeys, readKeys)
 }
 
-// getOrCreateHash 获取或创建哈希表对象
-// 如果 key 对应的值已存在且为哈希类型，则返回已有对象；
-// 如果 key 对应的值不存在，则创建新哈希并存入数据库；
-// 返回哈希对象和一个布尔值表示 key 是否已存在
-func (db *DB) getOrCreateHash(key string) (*hash.Hash, bool) {
-	hashObj, exists := db.getAsHash(key)
-	if exists {
-		return hashObj, true // key 已存在，直接返回
-	}
-	// key 不存在，创建新的哈希表对象
-	hashObj = hash.MakeHash()
-	db.PutEntity(key, &database.DataEntity{Data: hashObj})
-	return hashObj, false // 新创建的哈希表
-}
-
-// getAsSet 返回指定 key 对应的 set 对象，如果不存在则返回 nil
-func getAsSet(db *DB, key string) (set.Set, reply.ErrorReply) {
-	entity, exists := db.GetEntity(key)
-	if !exists {
-		return nil, nil
-	}
-
-	setObj, ok := entity.Data.(set.Set)
-	if !ok {
-		return nil, reply.MakeWrongTypeErrReply()
-	}
-	return setObj, nil
-}
-
-// getOrInitSet 返回指定 key 对应的 set 对象，若不存在，则创建一个 set 对象并返回
-func getOrInitSet(db *DB, key string) (set.Set, bool, reply.ErrorReply) {
-	setObj, errReply := getAsSet(db, key)
-	if errReply != nil {
-		return nil, false, errReply
-	}
-
-	isNew := false
-	if setObj == nil {
-		setObj = set.NewHashSet()
-		isNew = true
-	}
-
-	return setObj, isNew, nil
-}
-
-func getAsZSet(db *DB, key string) (zset.ZSet, bool) {
-	entity, exists := db.GetEntity(key)
-	if !exists {
-		return zset.NewZSet(), false
-	}
-
-	zsetObj, ok := entity.Data.(zset.ZSet)
-	if !ok {
-		return nil, true // Key exists but is not a ZSet
-	}
-
-	return zsetObj, true
+// RWUnLocks 对相关 key 解开写锁与读锁
+func (db *DB) RWUnLocks(writeKeys []string, readKeys []string) {
+	db.data.RWUnLocks(writeKeys, readKeys)
 }

@@ -1,7 +1,7 @@
 package util
 
 // ToCmdLine 把 strings 转换为 [][]byte
-func ToCmdLime(cmd ...string) [][]byte {
+func ToCmdLine(cmd ...string) [][]byte {
 	args := make([][]byte, len(cmd))
 	for i, s := range cmd {
 		args[i] = []byte(s)

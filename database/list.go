@@ -21,6 +21,19 @@ import (
 	"strconv"
 )
 
+func init() {
+	// 注册列表相关命令
+	// 参数数量为负数表示可变参数（key + 至少一个 value）
+	RegisterCommand("LPUSH", execLPush, writeFirstKey, -3) // key value [value ...] -> 至少 3 个参数
+	RegisterCommand("RPUSH", execRPush, writeFirstKey, -3) // key value [value ...] -> 至少 3 个参数
+	RegisterCommand("LPOP", execLPop, writeFirstKey, 2)    // key
+	RegisterCommand("RPOP", execRPop, writeFirstKey, 2)    // key
+	RegisterCommand("LRANGE", execLRange, readFirstKey, 4) // key start stop
+	RegisterCommand("LLEN", execLLen, readFirstKey, 2)     // LLEN key -> 恰好 2 个参数
+	RegisterCommand("LINDEX", execLIndex, readFirstKey, 3) // LINDEX key index -> 恰好 3 个参数
+	RegisterCommand("LSET", execLSet, writeFirstKey, 4)    // LSET key index value -> 恰好 4 个参数
+}
+
 // getAsList 获取指定 key 对应的列表，如果不存在则创建一个新列表。
 // 返回列表和一个布尔值，表示 key 是否已存在。
 func getAsList(db *DB, key string) (*list.List, bool) {
@@ -44,11 +57,14 @@ func execLPush(db *DB, args [][]byte) resp.Reply {
 	key := string(args[0])
 	values := args[1:]
 
+	var result resp.Reply
+
 	// 获取或创建列表
 	lst, exists := getAsList(db, key)
 	if lst == nil && exists {
 		// key 存在但不是 list 类型
-		return reply.MakeWrongTypeErrReply()
+		result = reply.MakeWrongTypeErrReply()
+		return result
 	}
 
 	// 插入值到列表头部
@@ -59,9 +75,10 @@ func execLPush(db *DB, args [][]byte) resp.Reply {
 	// 更新数据库中的列表
 	db.PutEntity(key, &database.DataEntity{Data: lst})
 	db.addAof(util.ToCmdLineWithName("LPUSH", args...))
-
 	// 返回列表当前长度
-	return reply.MakeIntReply(int64(lst.Len()))
+	result = reply.MakeIntReply(int64(lst.Len()))
+
+	return result
 }
 
 // execRPush 实现 RPUSH 命令：将一个或多个值追加到列表尾部（右端）
@@ -70,11 +87,14 @@ func execRPush(db *DB, args [][]byte) resp.Reply {
 	key := string(args[0])
 	values := args[1:]
 
+	var result resp.Reply
+
 	// 获取或创建列表
 	lst, exists := getAsList(db, key)
 	if lst == nil && exists {
 		// key 存在但不是 list 类型
-		return reply.MakeWrongTypeErrReply()
+		result = reply.MakeWrongTypeErrReply()
+		return result
 	}
 
 	// 追加值到列表尾部
@@ -87,7 +107,8 @@ func execRPush(db *DB, args [][]byte) resp.Reply {
 	db.addAof(util.ToCmdLineWithName("RPUSH", args...))
 
 	// 返回列表当前长度
-	return reply.MakeIntReply(int64(lst.Len()))
+	result = reply.MakeIntReply(int64(lst.Len()))
+	return result
 }
 
 // execLPop 实现 LPOP 命令：移除并返回列表的第一个元素（头部）
@@ -95,19 +116,24 @@ func execRPush(db *DB, args [][]byte) resp.Reply {
 func execLPop(db *DB, args [][]byte) resp.Reply {
 	key := string(args[0])
 
+	var result resp.Reply
+
 	// 获取列表
 	lst, exists := getAsList(db, key)
 	if !exists {
-		return reply.MakeNullBulkReply()
+		result = reply.MakeNullBulkReply()
+		return result
 	}
 	if lst == nil {
 		// key 存在但不是 list 类型
-		return reply.MakeWrongTypeErrReply()
+		result = reply.MakeWrongTypeErrReply()
+		return result
 	}
 
 	// 检查列表是否为空
 	if lst.Len() == 0 {
-		return reply.MakeNullBulkReply()
+		result = reply.MakeNullBulkReply()
+		return result
 	}
 
 	// 移除并获取头部元素
@@ -124,7 +150,9 @@ func execLPop(db *DB, args [][]byte) resp.Reply {
 	}
 
 	db.addAof(util.ToCmdLineWithName("LPOP", args...))
-	return reply.MakeBulkReply(value)
+	result = reply.MakeBulkReply(value)
+
+	return result
 }
 
 // execRPop 实现 RPOP 命令：移除并返回列表的最后一个元素（尾部）
@@ -132,19 +160,24 @@ func execLPop(db *DB, args [][]byte) resp.Reply {
 func execRPop(db *DB, args [][]byte) resp.Reply {
 	key := string(args[0])
 
+	var result resp.Reply
+
 	// 获取列表
 	lst, exists := getAsList(db, key)
 	if !exists {
-		return reply.MakeNullBulkReply()
+		result = reply.MakeNullBulkReply()
+		return result
 	}
 	if lst == nil {
 		// key 存在但不是 list 类型
-		return reply.MakeWrongTypeErrReply()
+		result = reply.MakeWrongTypeErrReply()
+		return result
 	}
 
 	// 检查列表是否为空
 	if lst.Len() == 0 {
-		return reply.MakeNullBulkReply()
+		result = reply.MakeNullBulkReply()
+		return result
 	}
 
 	// 移除并获取尾部元素
@@ -161,7 +194,8 @@ func execRPop(db *DB, args [][]byte) resp.Reply {
 	}
 
 	db.addAof(util.ToCmdLineWithName("RPOP", args...))
-	return reply.MakeBulkReply(value)
+	result = reply.MakeBulkReply(value)
+	return result
 }
 
 // execLRange 实现 LRANGE 命令：返回列表中指定区间内的元素
@@ -328,17 +362,4 @@ func execLSet(db *DB, args [][]byte) resp.Reply {
 	db.PutEntity(key, &database.DataEntity{Data: lst})
 	db.addAof(util.ToCmdLineWithName("LSET", args...))
 	return reply.MakeOKReply()
-}
-
-func init() {
-	// 注册列表相关命令
-	// 参数数量为负数表示可变参数（key + 至少一个 value）
-	RegisterCommand("LPUSH", execLPush, -3)  // key value [value ...] -> 至少 3 个参数
-	RegisterCommand("RPUSH", execRPush, -3)  // key value [value ...] -> 至少 3 个参数
-	RegisterCommand("LPOP", execLPop, 2)     // key
-	RegisterCommand("RPOP", execRPop, 2)     // key
-	RegisterCommand("LRANGE", execLRange, 4) // key start stop
-	RegisterCommand("LLEN", execLLen, 2)     // LLEN key -> 恰好 2 个参数
-	RegisterCommand("LINDEX", execLIndex, 3) // LINDEX key index -> 恰好 3 个参数
-	RegisterCommand("LSET", execLSet, 4)     // LSET key index value -> 恰好 4 个参数
 }

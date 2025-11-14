@@ -15,11 +15,11 @@ import (
 // STRLEN
 
 func init() {
-	RegisterCommand("GET", execGet, 2)
-	RegisterCommand("SET", execSet, 3)
-	RegisterCommand("SETNX", execSetNX, 3)
-	RegisterCommand("GETSET", execGetSet, 3)
-	RegisterCommand("STRLEN", execStrlen, 2)
+	RegisterCommand("GET", execGet, readFirstKey, 2)
+	RegisterCommand("SET", execSet, writeFirstKey, 3)
+	RegisterCommand("SETNX", execSetNX, writeFirstKey, 3)
+	RegisterCommand("GETSET", execGetSet, readFirstKey, 3)
+	RegisterCommand("STRLEN", execStrlen, readFirstKey, 2)
 }
 
 // execGet handle the GET command

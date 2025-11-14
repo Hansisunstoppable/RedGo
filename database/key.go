@@ -18,13 +18,13 @@ import (
 
 // init 方法，导入包时自动执行，注册方法到 cmdTable
 func init() {
-	RegisterCommand("DEL", execDel, -2)
-	RegisterCommand("EXIST", execExist, -2)
-	RegisterCommand("FLUSHDB", execFlushDB, 1)
-	RegisterCommand("TYPE", execType, 2)
-	RegisterCommand("RENAME", execRename, 3)
-	RegisterCommand("RENAMENX", execRenameNX, 3)
-	RegisterCommand("KEYS", execKeys, 2)
+	RegisterCommand("DEL", execDel, writeAllKeys, -2)
+	RegisterCommand("EXIST", execExist, readAllKeys, -2)
+	RegisterCommand("FLUSHDB", execFlushDB, writeAllKeys, 1)
+	RegisterCommand("TYPE", execType, readFirstKey, 2)
+	RegisterCommand("RENAME", execRename, prepareRename, 3)
+	RegisterCommand("RENAMENX", execRenameNX, prepareRename, 3)
+	RegisterCommand("KEYS", execKeys, noPrepare, 2) // 在 foreach 内上锁
 }
 
 // execDel Handle the DEL command
@@ -73,6 +73,13 @@ func execType(db *DB, args [][]byte) resp.Reply {
 		return reply.MakeStatusReply("none")
 	}
 	return reply.MakeUnknownReply()
+}
+
+// rename 命令专属的 prepare
+func prepareRename(args [][]byte) ([]string, []string) {
+	src := string(args[0])
+	dest := string(args[1])
+	return []string{dest}, []string{src}
 }
 
 // execRename Handle the RENAME command, RENAME key1 key2, 将 key1 改名为 key2

@@ -26,6 +26,8 @@ test_redis_*/
 # Go workspace file
 go.work
 
+CLAUDE.md
+
 .idea/
 
 .vscode/

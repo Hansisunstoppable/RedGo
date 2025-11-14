@@ -1,12 +1,27 @@
 package database
 
 import (
+	"Godis/datastruct/zset"
 	"Godis/interface/database"
 	"Godis/interface/resp"
 	"Godis/lib/util"
 	"Godis/resp/reply"
 	"strconv"
 )
+
+func getAsZSet(db *DB, key string) (zset.ZSet, bool) {
+	entity, exists := db.GetEntity(key)
+	if !exists {
+		return zset.NewZSet(), false
+	}
+
+	zsetObj, ok := entity.Data.(zset.ZSet)
+	if !ok {
+		return nil, true // Key exists but is not a ZSet
+	}
+
+	return zsetObj, true
+}
 
 // parseFloat 将字符串解析为 float64
 func parseFloat(val string) (float64, resp.Reply) {
@@ -274,11 +289,11 @@ func execZRank(db *DB, args [][]byte) resp.Reply {
 }
 
 func init() {
-	RegisterCommand("ZADD", execZAdd, -4) // ZADD zset1 score1 member1 至少四个参数
-	RegisterCommand("ZSCORE", execZScore, 3)
-	RegisterCommand("ZCARD", execZCard, 2)
-	RegisterCommand("ZRANGE", execZRange, -4)
-	RegisterCommand("ZREM", execZRem, -3)
-	RegisterCommand("ZCOUNT", execZCount, 4)
-	RegisterCommand("ZRANK", execZRank, 3)
+	RegisterCommand("ZADD", execZAdd, writeFirstKey, -4) // ZADD zset1 score1 member1 至少四个参数
+	RegisterCommand("ZSCORE", execZScore, readFirstKey, 3)
+	RegisterCommand("ZCARD", execZCard, readFirstKey, 2)
+	RegisterCommand("ZRANGE", execZRange, readFirstKey, -4)
+	RegisterCommand("ZREM", execZRem, writeFirstKey, -3)
+	RegisterCommand("ZCOUNT", execZCount, readFirstKey, 4)
+	RegisterCommand("ZRANK", execZRank, readFirstKey, 3)
 }

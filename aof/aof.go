@@ -120,7 +120,7 @@ func (h *AofHandler) LoadAof() error {
 	}
 	// 初始默认连接 0 号数据库; 若执行完 aof 之后不在 0 号数据库，则需要向 aof 写入 select 0
 	if h.currentDB != 0 {
-		data := reply.MakeMultiBulkReply(util.ToCmdLime("SELECT", strconv.Itoa(initDBIndex))).ToBytes()
+		data := reply.MakeMultiBulkReply(util.ToCmdLine("SELECT", strconv.Itoa(initDBIndex))).ToBytes()
 		_, err := h.aofFile.Write(data)
 		if err != nil {
 			logger.Error("write aof file error: " + err.Error())
@@ -138,7 +138,7 @@ func (h *AofHandler) handleAof() {
 	for p := range h.aofChan {
 		if p.dbIndex != h.currentDB { // 数据库产生切换，要向 aof 文件写入 SELECT dbIndex 命令
 			h.currentDB = p.dbIndex                                                                       // 更新当前数据库序号
-			data := reply.MakeMultiBulkReply(util.ToCmdLime("SELECT", strconv.Itoa(p.dbIndex))).ToBytes() // 写入 SELECT 命令
+			data := reply.MakeMultiBulkReply(util.ToCmdLine("SELECT", strconv.Itoa(p.dbIndex))).ToBytes() // 写入 SELECT 命令
 			_, err := h.aofFile.Write(data)
 			if err != nil {
 				logger.Error("write aof file error: " + err.Error())

@@ -10,19 +10,49 @@ import (
 )
 
 func init() {
-	RegisterCommand("SADD", execSAdd, -3)
-	RegisterCommand("SCARD", execSCard, 2)
-	RegisterCommand("SISMEMBER", execSIsMember, 3)
-	RegisterCommand("SMEMBERS", execSMembers, 2)
-	RegisterCommand("SREM", execSRem, -3)
-	RegisterCommand("SPOP", execSPop, -2)
-	RegisterCommand("SRANDMEMBER", execSRandMember, -2)
-	RegisterCommand("SUNION", execSUnion, -2)
-	RegisterCommand("SUNIONSTORE", execSUnionStore, -3)
-	RegisterCommand("SINTER", execSInter, -2)
-	RegisterCommand("SINTERSTORE", execSInterStore, -3)
-	RegisterCommand("SDIFF", execSDiff, -2)
-	RegisterCommand("SDIFFSTORE", execSDiffStore, -3)
+	RegisterCommand("SADD", execSAdd, writeFirstKey, -3)
+	RegisterCommand("SCARD", execSCard, readFirstKey, 2)
+	RegisterCommand("SISMEMBER", execSIsMember, readFirstKey, 3)
+	RegisterCommand("SMEMBERS", execSMembers, readFirstKey, 2)
+	RegisterCommand("SREM", execSRem, writeFirstKey, -3)
+	RegisterCommand("SPOP", execSPop, writeFirstKey, -2)
+	RegisterCommand("SRANDMEMBER", execSRandMember, readFirstKey, -2)
+	RegisterCommand("SUNION", execSUnion, prepareSetCalculate, -2)
+	RegisterCommand("SUNIONSTORE", execSUnionStore, prepareSetCalculateStore, -3)
+	RegisterCommand("SINTER", execSInter, prepareSetCalculate, -2)
+	RegisterCommand("SINTERSTORE", execSInterStore, prepareSetCalculateStore, -3)
+	RegisterCommand("SDIFF", execSDiff, prepareSetCalculate, -2)
+	RegisterCommand("SDIFFSTORE", execSDiffStore, prepareSetCalculateStore, -3)
+}
+
+// getAsSet 返回指定 key 对应的 set 对象，如果不存在则返回 nil
+func getAsSet(db *DB, key string) (set.Set, reply.ErrorReply) {
+	entity, exists := db.GetEntity(key)
+	if !exists {
+		return nil, nil
+	}
+
+	setObj, ok := entity.Data.(set.Set)
+	if !ok {
+		return nil, reply.MakeWrongTypeErrReply()
+	}
+	return setObj, nil
+}
+
+// getOrInitSet 返回指定 key 对应的 set 对象，若不存在，则创建一个 set 对象并返回
+func getOrInitSet(db *DB, key string) (set.Set, bool, reply.ErrorReply) {
+	setObj, errReply := getAsSet(db, key)
+	if errReply != nil {
+		return nil, false, errReply
+	}
+
+	isNew := false
+	if setObj == nil {
+		setObj = set.NewHashSet()
+		isNew = true
+	}
+
+	return setObj, isNew, nil
 }
 
 // execSAdd 实现 SADD key member1 member2...
@@ -30,10 +60,13 @@ func execSAdd(db *DB, args [][]byte) resp.Reply {
 	key := string(args[0])
 	members := args[1:]
 
+	var result resp.Reply
+
 	// 根据 key 获取或创建集合
 	setObj, isNew, errReply := getOrInitSet(db, key)
 	if errReply != nil {
-		return errReply
+		result = errReply
+		return result
 	}
 
 	// 加入集合
@@ -51,8 +84,9 @@ func execSAdd(db *DB, args [][]byte) resp.Reply {
 		// Add to AOF
 		db.addAof(util.ToCmdLineWithName("SADD", args...))
 	}
+	result = reply.MakeIntReply(int64(count))
 
-	return reply.MakeIntReply(int64(count))
+	return result
 }
 
 // execSCard 返回集合内元素数量
@@ -91,22 +125,27 @@ func execSIsMember(db *DB, args [][]byte) resp.Reply {
 func execSMembers(db *DB, args [][]byte) resp.Reply {
 	key := string(args[0])
 
+	var result resp.Reply
+
 	setObj, errReply := getAsSet(db, key)
 	if errReply != nil {
-		return errReply
+		result = errReply
+		return result
 	}
 	if setObj == nil {
-		return reply.MakeMultiBulkReply([][]byte{})
+		result = reply.MakeMultiBulkReply([][]byte{})
+		return result
 	}
 
 	// 以字节切片形式返回
 	members := setObj.Members()
-	result := make([][]byte, len(members))
+	resultBytes := make([][]byte, len(members))
 	for i, member := range members {
-		result[i] = []byte(member)
+		resultBytes[i] = []byte(member)
 	}
+	result = reply.MakeMultiBulkReply(resultBytes)
 
-	return reply.MakeMultiBulkReply(result)
+	return result
 }
 
 func execSRem(db *DB, args [][]byte) resp.Reply {
@@ -154,17 +193,21 @@ func execSPop(db *DB, args [][]byte) resp.Reply {
 			return reply.MakeStandardErrorReply("ERR value is out of range, must be positive")
 		}
 	}
+	var result resp.Reply
 
 	setObj, errReply := getAsSet(db, key)
 	if errReply != nil {
-		return errReply
+		result = errReply
+		return result
 	}
 	if setObj == nil || setObj.Len() == 0 {
-		return reply.MakeNullBulkReply()
+		result = reply.MakeNullBulkReply()
+		return result
 	}
 
 	if count == 0 {
-		return reply.MakeMultiBulkReply([][]byte{})
+		result = reply.MakeMultiBulkReply([][]byte{})
+		return result
 	}
 
 	// 防止 count 大于集合元素总数
@@ -173,7 +216,7 @@ func execSPop(db *DB, args [][]byte) resp.Reply {
 	}
 
 	// 随机获取 count 个待删除元素
-	members := setObj.RandomDistinctMembers(count) // TODO
+	members := setObj.RandomDistinctMembers(count)
 
 	// 删除这些元素
 	for _, member := range members {
@@ -197,14 +240,16 @@ func execSPop(db *DB, args [][]byte) resp.Reply {
 
 	// 构造 reply
 	if count == 1 {
-		return reply.MakeBulkReply([]byte(members[0]))
+		result = reply.MakeBulkReply([]byte(members[0]))
+	} else {
+		resultBytes := make([][]byte, len(members))
+		for i, member := range members {
+			resultBytes[i] = []byte(member)
+		}
+		result = reply.MakeMultiBulkReply(resultBytes)
 	}
 
-	result := make([][]byte, len(members))
-	for i, member := range members {
-		result[i] = []byte(member)
-	}
-	return reply.MakeMultiBulkReply(result)
+	return result
 }
 
 func execSRandMember(db *DB, args [][]byte) resp.Reply {
